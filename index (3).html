@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM / Финансовый учёт</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f7f7f5;color:#1a1a1a;min-height:100vh}
+.shell{max-width:1200px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 0 1px rgba(0,0,0,.06)}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #ebebea;gap:12px;flex-wrap:wrap}
+.logo{font-size:14px;font-weight:500;color:#1a1a1a;letter-spacing:-.01em}
+.hint{font-size:12px;color:#888}
+.tabs{border-bottom:1px solid #ebebea;display:flex;overflow-x:auto;padding:0 16px;gap:2px}
+.tab{padding:10px 14px;font-size:13px;border:none;cursor:pointer;background:transparent;border-bottom:2px solid transparent;color:#666;white-space:nowrap;transition:color .15s;flex-shrink:0}
+.tab:hover{color:#1a1a1a}
+.tab.active{font-weight:500;color:#1a1a1a;border-bottom-color:#1a1a1a}
+.content{padding:20px 20px}
+.summary{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.stat{background:#f7f7f5;border-radius:8px;padding:13px 15px;flex:1;min-width:130px}
+.slbl{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.sval{font-size:18px;font-weight:500;color:#1a1a1a}
+.twrap{overflow-x:auto;border-radius:10px;border:1px solid #ebebea}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead tr{background:#fafaf9;border-bottom:1px solid #e5e5e3}
+th{padding:8px 10px;text-align:left;font-weight:500;font-size:11px;color:#888;white-space:nowrap;user-select:none}
+td{padding:8px 10px;color:#1a1a1a;border-bottom:1px solid #f0f0ee;vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafaf9}
+.badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;white-space:nowrap;display:inline-block}
+.bi{padding:3px 7px;border:1px solid #e0e0de;border-radius:5px;background:transparent;cursor:pointer;color:#888;font-size:13px;margin-right:3px;line-height:1.5;transition:background .1s}
+.bi:hover{background:#f5f5f3;color:#1a1a1a}
+.bs{padding:3px 9px;border:none;border-radius:5px;background:#e8f5e1;color:#2d6a00;cursor:pointer;font-size:13px;margin-right:3px;font-weight:500}
+.bc{padding:3px 9px;border:none;border-radius:5px;background:#fce8e8;color:#b02020;cursor:pointer;font-size:13px;font-weight:500}
+.badd{margin-top:10px;padding:7px 15px;font-size:12px;background:transparent;border:1px solid #ddd;border-radius:8px;cursor:pointer;color:#666;transition:background .1s}
+.badd:hover{background:#f5f5f3;color:#1a1a1a}
+td input,td select{padding:4px 7px;font-size:12px;border:1px solid #ddd;border-radius:5px;background:#fff;color:#1a1a1a;font-family:inherit;outline:none;transition:border-color .15s}
+td input:focus,td select:focus{border-color:#999}
+.erow{background:#fafffe}
+.emsg td{text-align:center;color:#aaa;padding:2.5rem;font-size:13px}
+.num{font-variant-numeric:tabular-nums}
+.ptbl td{padding:11px 14px}
+.profit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+.profit-stat{background:#f7f7f5;border-radius:8px;padding:14px 15px}
+.export-btn{padding:7px 14px;font-size:12px;background:transparent;border:1px solid #ddd;border-radius:8px;cursor:pointer;color:#666;margin-left:8px}
+.export-btn:hover{background:#f5f5f3}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <span class="logo">CRM / Финансовый учёт</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="hint" id="savehint">Данные сохраняются в браузере</span>
+      <button class="export-btn" onclick="exportCSV()">↓ Экспорт CSV</button>
+    </div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="content" id="content"></div>
+</div>
+
+<script>
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now();
+const fmtN=n=>new Intl.NumberFormat('ru-RU').format(Math.round(n||0));
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtD=v=>v?v.split('-').reverse().join('.'):'';
+
+const CS={'Полная оплата':{bg:'#e8f5e1',c:'#2d6a00'},'Рассрочка от нас':{bg:'#fceee8',c:'#8a3010'},'Рассрочка 12':{bg:'#eeedfb',c:'#3c3489'},'Рассрочка 10':{bg:'#e5f1fb',c:'#0c4480'}};
+const SS={'Новый':{bg:'#e5f1fb',c:'#0c4480'},'Новый лид':{bg:'#e5f1fb',c:'#0c4480'},'Прогрев':{bg:'#fdf3e0',c:'#7a4800'},'В прогреве':{bg:'#fdf3e0',c:'#7a4800'},'В работе':{bg:'#eeedfb',c:'#3c3489'},'Диалог':{bg:'#eeedfb',c:'#3c3489'},'Заявка':{bg:'#eeedfb',c:'#3c3489'},'Оплатил':{bg:'#e8f5e1',c:'#2d6a00'},'Отказ':{bg:'#fce8e8',c:'#8a1a1a'},'Завершён':{bg:'#f0f0ee',c:'#555'}};
+
+const TABS=[{k:'revenue',l:'Выручка'},{k:'expenses',l:'Расходы'},{k:'profit',l:'Расчёт прибыли'},{k:'fund',l:'Фонд'},{k:'clients',l:'Клиенты в работе'},{k:'metrics',l:'Охваты / крики'},{k:'leads',l:'Волны продаж / лиды'}];
+
+const COLS={
+  revenue:[{k:'name',l:'Участник',t:'txt',w:145},{k:'category',l:'Категория',t:'bdg',opts:['Полная оплата','Рассрочка от нас','Рассрочка 12','Рассрочка 10'],s:CS,w:148},{k:'shouldPay',l:'Должны оплатить',t:'num',w:115},{k:'paid',l:'Оплатили',t:'num',w:92},{k:'received',l:'Пришло на счёт',t:'num',w:115},{k:'comment',l:'Комментарий',t:'txt',w:170},{k:'date',l:'Дата',t:'date',w:108}],
+  expenses:[{k:'item',l:'Статья расходов',t:'txt',w:210},{k:'amount',l:'Сумма',t:'num',w:105},{k:'type',l:'Тип',t:'sel',opts:['Реклама','Сервисы','Команда','Налоги','Прочее'],w:105},{k:'date',l:'Дата',t:'date',w:108},{k:'comment',l:'Комментарий',t:'txt',w:210}],
+  fund:[{k:'purpose',l:'Назначение',t:'txt',w:210},{k:'amount',l:'Сумма',t:'num',w:105},{k:'percent',l:'% от выручки',t:'txt',w:105},{k:'date',l:'Дата',t:'date',w:108},{k:'comment',l:'Комментарий',t:'txt',w:210}],
+  clients:[{k:'name',l:'Имя',t:'txt',w:132},{k:'contact',l:'Контакт / TG',t:'txt',w:122},{k:'status',l:'Статус',t:'bdg',opts:['Новый лид','В работе','В прогреве','Оплатил','Отказ','Завершён'],s:SS,w:122},{k:'product',l:'Продукт',t:'txt',w:122},{k:'amount',l:'Сумма',t:'num',w:92},{k:'startDate',l:'Дата входа',t:'date',w:105},{k:'nextStep',l:'Следующий шаг',t:'txt',w:185}],
+  metrics:[{k:'date',l:'Дата',t:'date',w:108},{k:'platform',l:'Площадка',t:'sel',opts:['Instagram','Telegram','VK','YouTube','Email','Другое'],w:112},{k:'reach',l:'Охват',t:'num',w:82},{k:'responses',l:'Отклики',t:'num',w:82},{k:'conversion',l:'Конверсия %',t:'txt',w:92},{k:'comment',l:'Комментарий',t:'txt',w:210}],
+  leads:[{k:'name',l:'Имя',t:'txt',w:132},{k:'source',l:'Источник',t:'txt',w:112},{k:'status',l:'Статус',t:'bdg',opts:['Новый','Прогрев','Диалог','Заявка','Оплатил','Отказ'],s:SS,w:112},{k:'product',l:'Продукт',t:'txt',w:122},{k:'amount',l:'Сумма',t:'num',w:92},{k:'date',l:'Дата',t:'date',w:105},{k:'comment',l:'Комментарий',t:'txt',w:185}]
+};
+
+const EM={
+  revenue:{name:'',category:'Полная оплата',shouldPay:'',paid:'',received:'',comment:'',date:''},
+  expenses:{item:'',amount:'',type:'Реклама',date:'',comment:''},
+  fund:{purpose:'',amount:'',percent:'',date:'',comment:''},
+  clients:{name:'',contact:'',status:'Новый лид',product:'',amount:'',startDate:'',nextStep:''},
+  metrics:{date:'',platform:'Instagram',reach:'',responses:'',conversion:'',comment:''},
+  leads:{name:'',source:'',status:'Новый',product:'',amount:'',date:'',comment:''}
+};
+
+let ctab='revenue';
+let D={revenue:[],expenses:[],fund:[],clients:[],metrics:[],leads:[]};
+let eid=null,edt={},adding=false,adt={};
+
+function loadD(){try{const s=localStorage.getItem('crm-app-v1');if(s)D=JSON.parse(s);}catch(x){}}
+function saveD(){try{localStorage.setItem('crm-app-v1',JSON.stringify(D));showSaved();}catch(x){}}
+function showSaved(){const h=document.getElementById('savehint');if(!h)return;h.textContent='Сохранено ✓';h.style.color='#2d6a00';setTimeout(()=>{h.textContent='Данные сохраняются в браузере';h.style.color='';},2000);}
+
+function bdg(v,s){if(!v)return'';const st=s?.[v]||{bg:'#f0f0ee',c:'#555'};return`<span class="badge" style="background:${st.bg};color:${st.c}">${esc(v)}</span>`}
+
+function cv(col,v){
+  if(col.t==='bdg')return bdg(v,col.s);
+  if(col.t==='num')return v?`<span class="num">${fmtN(v)} ₽</span>`:'';
+  if(col.t==='date')return fmtD(v);
+  return esc(v||'');
+}
+
+function ci(col,v){
+  const vs=esc(v||'');
+  if(col.t==='bdg'||col.t==='sel'){
+    const os=col.opts.map(o=>`<option value="${esc(o)}"${o===(v||'')?'selected':''}>${esc(o)}</option>`).join('');
+    return`<select data-key="${col.k}" style="min-width:${Math.min(col.w-14,138)}px">${os}</select>`;
+  }
+  if(col.t==='date')return`<input type="date" data-key="${col.k}" value="${vs}">`;
+  if(col.t==='num')return`<input type="number" data-key="${col.k}" value="${v||''}" style="width:${Math.min(col.w-14,98)}px">`;
+  return`<input type="text" data-key="${col.k}" value="${vs}" style="width:${Math.min(col.w-14,155)}px">`;
+}
+
+function tblRow(t,row,i){
+  const cs=COLS[t].map(c=>`<td>${cv(c,row[c.k])}</td>`).join('');
+  return`<tr><td style="color:#aaa;font-size:11px;width:28px">${i+1}</td>${cs}<td style="white-space:nowrap"><button class="bi" onclick="doEd('${t}','${row.id}')">✎</button><button class="bi" onclick="doDl('${t}','${row.id}')">✕</button></td></tr>`;
+}
+
+function edRow(t,data,isNew){
+  const cs=COLS[t].map(c=>`<td style="padding:3px 5px">${ci(c,data[c.k])}</td>`).join('');
+  const sf=isNew?`doSA('${t}')`:`doSE('${t}')`;
+  const cf=isNew?`doCA()`:`doCE()`;
+  return`<tr class="erow"><td style="width:28px;color:#aaa;font-size:11px">${isNew?'★':''}</td>${cs}<td style="white-space:nowrap;padding:3px 6px"><button class="bs" onclick="${sf}">✓ Сохранить</button> <button class="bc" onclick="${cf}">✕</button></td></tr>`;
+}
+
+function tbl(t){
+  const cols=COLS[t],rs=D[t];
+  const hdr=`<tr><th style="width:28px">#</th>${cols.map(c=>`<th style="width:${c.w}px">${c.l}</th>`).join('')}<th style="width:100px"></th></tr>`;
+  let body='';
+  if(!rs.length&&!adding){body=`<tr class="emsg"><td colspan="${cols.length+2}">Строк пока нет — нажмите «+ Добавить строку»</td></tr>`;}
+  else{
+    rs.forEach((r,i)=>{body+=eid===r.id?edRow(t,edt,false):tblRow(t,r,i);});
+    if(adding)body+=edRow(t,adt,true);
+  }
+  return`<div class="twrap"><table><thead>${hdr}</thead><tbody>${body}</tbody></table></div>${(!adding&&!eid)?`<button class="badd" onclick="doAdd('${t}')">+ Добавить строку</button>`:''}`;
+}
+
+function readIn(){const r={};document.querySelectorAll('[data-key]').forEach(el=>{r[el.dataset.key]=el.value;});return r;}
+
+function doEd(t,id){const row=D[t].find(r=>r.id===id);eid=id;edt={...row};adding=false;rc();}
+function doSE(t){const nd=readIn();D[t]=D[t].map(r=>r.id===eid?{...r,...nd}:r);eid=null;edt={};saveD();rc();}
+function doCE(){eid=null;edt={};rc();}
+function doAdd(t){adding=true;adt={...EM[t],id:uid()};eid=null;rc();}
+function doSA(t){const nd=readIn();D[t]=[...D[t],{...adt,...nd}];adding=false;adt={};saveD();rc();}
+function doCA(){adding=false;adt={};rc();}
+function doDl(t,id){if(!confirm('Удалить строку?'))return;D[t]=D[t].filter(r=>r.id!==id);saveD();rc();}
+
+function summ(){
+  const r=D.revenue;
+  const sp=r.reduce((s,x)=>s+(+x.shouldPay||0),0);
+  const pd=r.reduce((s,x)=>s+(+x.paid||0),0);
+  const rv=r.reduce((s,x)=>s+(+x.received||0),0);
+  const df=sp-rv;
+  return`<div class="summary">
+    <div class="stat"><div class="slbl">К получению</div><div class="sval">${fmtN(sp)} ₽</div></div>
+    <div class="stat"><div class="slbl">Оплатили</div><div class="sval">${fmtN(pd)} ₽</div></div>
+    <div class="stat"><div class="slbl">Пришло на счёт</div><div class="sval">${fmtN(rv)} ₽</div></div>
+    <div class="stat"><div class="slbl">Остаток</div><div class="sval" style="color:${df>50?'#b06000':'#2d6a00'}">${fmtN(df)} ₽</div></div>
+  </div>`;
+}
+
+function proft(){
+  const rv=D.revenue.reduce((s,r)=>s+(+r.received||0),0);
+  const ex=D.expenses.reduce((s,r)=>s+(+r.amount||0),0);
+  const fn=D.fund.reduce((s,r)=>s+(+r.amount||0),0);
+  const pr=rv-ex-fn;
+  const mg=rv>0?((pr/rv)*100).toFixed(1):'0';
+  const clr=pr<0?'#b02020':'#1a1a1a';
+  return`<div class="profit-grid">
+    <div class="profit-stat"><div class="slbl">Выручка</div><div class="sval" style="font-size:20px">${fmtN(rv)} ₽</div></div>
+    <div class="profit-stat"><div class="slbl">Расходы</div><div class="sval" style="font-size:20px">${fmtN(ex)} ₽</div></div>
+    <div class="profit-stat"><div class="slbl">Фонд</div><div class="sval" style="font-size:20px">${fmtN(fn)} ₽</div></div>
+    <div class="profit-stat"><div class="slbl">Чистая прибыль</div><div class="sval" style="font-size:20px;color:${clr}">${fmtN(pr)} ₽</div></div>
+  </div>
+  <div class="twrap"><table class="ptbl"><thead><tr><th>Статья</th><th style="text-align:right">Сумма</th></tr></thead><tbody>
+    <tr><td>Выручка (пришло на счёт)</td><td style="text-align:right">${fmtN(rv)} ₽</td></tr>
+    <tr><td style="color:#b02020">Расходы</td><td style="text-align:right;color:#b02020">− ${fmtN(ex)} ₽</td></tr>
+    <tr><td style="color:#b02020">Фонд</td><td style="text-align:right;color:#b02020">− ${fmtN(fn)} ₽</td></tr>
+    <tr style="background:#fafaf9;border-top:1px solid #e5e5e3"><td style="font-weight:500">Чистая прибыль</td><td style="text-align:right;font-weight:500;color:${clr}">${fmtN(pr)} ₽</td></tr>
+    <tr><td>Маржа</td><td style="text-align:right">${mg}%</td></tr>
+  </tbody></table></div>
+  ${!D.revenue.length?'<p style="margin-top:16px;font-size:13px;color:#aaa">Заполните вкладки «Выручка» и «Расходы» — здесь появятся расчёты.</p>':''}`;
+}
+
+function exportCSV(){
+  const cols=COLS[ctab];
+  if(!cols)return;
+  const header=cols.map(c=>c.l).join(';');
+  const rows=D[ctab].map(r=>cols.map(c=>String(r[c.k]||'').replace(/;/g,',')).join(';')).join('\n');
+  const blob=new Blob(['\ufeff'+header+'\n'+rows],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=ctab+'.csv';a.click();URL.revokeObjectURL(url);
+}
+
+function rc(){
+  const c=document.getElementById('content');
+  if(!c)return;
+  const M={revenue:()=>summ()+tbl('revenue'),expenses:()=>tbl('expenses'),profit:proft,fund:()=>tbl('fund'),clients:()=>tbl('clients'),metrics:()=>tbl('metrics'),leads:()=>tbl('leads')};
+  c.innerHTML=(M[ctab]||M.revenue)();
+}
+
+function rt(){
+  const el=document.getElementById('tabs');
+  if(!el)return;
+  el.innerHTML=TABS.map(t=>`<button class="tab${ctab===t.k?' active':''}" onclick="st('${t.k}')">${t.l}</button>`).join('');
+}
+
+function st(t){ctab=t;eid=null;adding=false;edt={};adt={};rt();rc();}
+
+loadD();rt();rc();
+</script>
+</body>
+</html>
